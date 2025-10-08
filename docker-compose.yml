@@ -1,0 +1,205 @@
+version: '3.8'
+
+services:
+  auth-db:
+    image: postgres:15-alpine
+    container_name: auth-db
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: expense_user
+      POSTGRES_PASSWORD: expense_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - auth-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U expense_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  expense-db:
+    image: postgres:15-alpine
+    container_name: expense-db
+    environment:
+      POSTGRES_DB: expense_db
+      POSTGRES_USER: expense_user
+      POSTGRES_PASSWORD: expense_pass
+    ports:
+      - "5433:5432"
+    volumes:
+      - expense-db-data:/var/lib/postgresql/data
+
+  category-db:
+    image: postgres:15-alpine
+    container_name: category-db
+    environment:
+      POSTGRES_DB: category_db
+      POSTGRES_USER: expense_user
+      POSTGRES_PASSWORD: expense_pass
+    ports:
+      - "5434:5432"
+    volumes:
+      - category-db-data:/var/lib/postgresql/data
+
+  report-db:
+    image: postgres:15-alpine
+    container_name: report-db
+    environment:
+      POSTGRES_DB: report_db
+      POSTGRES_USER: expense_user
+      POSTGRES_PASSWORD: expense_pass
+    ports:
+      - "5435:5432"
+    volumes:
+      - report-db-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: expense_user
+      RABBITMQ_DEFAULT_PASS: expense_pass
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  auth-service:
+    build: ./services/auth-service
+    container_name: auth-service
+    ports:
+      - "3001:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DB_HOST: auth-db
+      DB_PORT: 5432
+      DB_NAME: auth_db
+      DB_USER: expense_user
+      DB_PASSWORD: expense_pass
+      JWT_SECRET: dev-secret-change-in-production
+      JWT_EXPIRE: 15m
+      REFRESH_TOKEN_EXPIRE: 7d
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      auth-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./services/auth-service:/app
+      - /app/node_modules
+
+  expense-service:
+    build: ./services/expense-service
+    container_name: expense-service
+    ports:
+      - "3002:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DB_HOST: expense-db
+      DB_PORT: 5432
+      DB_NAME: expense_db
+      DB_USER: expense_user
+      DB_PASSWORD: expense_pass
+      AUTH_SERVICE_URL: http://auth-service:3000
+      CATEGORY_SERVICE_URL: http://category-service:3000
+      RABBITMQ_URL: amqp://expense_user:expense_pass@rabbitmq:5672
+    depends_on:
+      - expense-db
+      - rabbitmq
+      - auth-service
+    volumes:
+      - ./services/expense-service:/app
+      - /app/node_modules
+
+  category-service:
+    build: ./services/category-service
+    container_name: category-service
+    ports:
+      - "3003:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DB_HOST: category-db
+      DB_PORT: 5432
+      DB_NAME: category_db
+      DB_USER: expense_user
+      DB_PASSWORD: expense_pass
+      AUTH_SERVICE_URL: http://auth-service:3000
+      EXPENSE_SERVICE_URL: http://expense-service:3000
+    depends_on:
+      - category-db
+      - auth-service
+    volumes:
+      - ./services/category-service:/app
+      - /app/node_modules
+
+  report-service:
+    build: ./services/report-service
+    container_name: report-service
+    ports:
+      - "3004:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DB_HOST: report-db
+      DB_PORT: 5432
+      DB_NAME: report_db
+      DB_USER: expense_user
+      DB_PASSWORD: expense_pass
+      AUTH_SERVICE_URL: http://auth-service:3000
+      EXPENSE_SERVICE_URL: http://expense-service:3000
+      CATEGORY_SERVICE_URL: http://category-service:3000
+      RABBITMQ_URL: amqp://expense_user:expense_pass@rabbitmq:5672
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - report-db
+      - rabbitmq
+      - redis
+    volumes:
+      - ./services/report-service:/app
+      - /app/node_modules
+
+  api-gateway:
+    image: nginx:alpine
+    container_name: api-gateway
+    ports:
+      - "8080:80"
+    volumes:
+      - ./infrastructure/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - auth-service
+      - expense-service
+      - category-service
+      - report-service
+
+volumes:
+  auth-db-data:
+  expense-db-data:
+  category-db-data:
+  report-db-data:
+  redis-data:
+  rabbitmq-data:
+
