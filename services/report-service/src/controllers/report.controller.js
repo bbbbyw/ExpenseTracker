@@ -28,14 +28,22 @@ class ReportController {
                 params: { startDate: start, endDate: end }
             });
 
-            const byCategoryResp = await db.query(
-                `SELECT category_id, COALESCE(SUM(amount),0)::float AS amount
-                 FROM expenses
-                 WHERE user_id = $1 AND expense_date BETWEEN $2 AND $3
-                 GROUP BY category_id
-                 ORDER BY amount DESC`,
-                [userId, start, end]
-            ).catch(() => ({ rows: [] }));
+            // Get expenses from Expense Service API
+            const expensesResp = await axios.get(`${process.env.EXPENSE_SERVICE_URL}/api/v1/expenses`, {
+                headers: { Authorization: req.headers.authorization },
+                params: { startDate: start, endDate: end }
+            }).catch(() => ({ data: { expenses: [] } }));
+
+            // Group by category
+            const byCategoryMap = {};
+            expensesResp.data.expenses?.forEach(exp => {
+                const catId = exp.category_id;
+                if (!byCategoryMap[catId]) {
+                    byCategoryMap[catId] = { category_id: catId, amount: 0 };
+                }
+                byCategoryMap[catId].amount += Number(exp.amount);
+            });
+            const byCategoryResp = { rows: Object.values(byCategoryMap).sort((a, b) => b.amount - a.amount) };
 
             const data = {
                 totalSpent: statsResp.data.totalAmount,
@@ -57,14 +65,26 @@ class ReportController {
         try {
             const userId = req.user.id || req.user.userId;
             const { startDate, endDate } = req.query;
-            const { rows } = await db.query(
-                `SELECT category_id, COALESCE(SUM(amount),0)::float AS amount
-                 FROM expenses WHERE user_id = $1 AND expense_date BETWEEN $2 AND $3
-                 GROUP BY category_id ORDER BY amount DESC`,
-                [userId, startDate, endDate]
-            ).catch(() => ({ rows: [] }));
+            
+            // Get expenses from Expense Service API
+            const expensesResp = await axios.get(`${process.env.EXPENSE_SERVICE_URL}/api/v1/expenses`, {
+                headers: { Authorization: req.headers.authorization },
+                params: { startDate, endDate }
+            }).catch(() => ({ data: { expenses: [] } }));
+
+            // Group by category
+            const categoryMap = {};
+            expensesResp.data.expenses?.forEach(exp => {
+                const catId = exp.category_id;
+                if (!categoryMap[catId]) {
+                    categoryMap[catId] = { categoryId: catId, amount: 0 };
+                }
+                categoryMap[catId].amount += Number(exp.amount);
+            });
+
+            const rows = Object.values(categoryMap).sort((a, b) => b.amount - a.amount);
             const total = rows.reduce((a, r) => a + Number(r.amount), 0) || 1;
-            const categories = rows.map(r => ({ categoryId: r.category_id, amount: Number(r.amount), percentage: Number(((r.amount / total) * 100).toFixed(2)) }));
+            const categories = rows.map(r => ({ categoryId: r.categoryId, amount: Number(r.amount), percentage: Number(((r.amount / total) * 100).toFixed(2)) }));
             res.json({ categories });
         } catch (error) { next(error); }
     }
@@ -73,16 +93,35 @@ class ReportController {
         try {
             const userId = req.user.id || req.user.userId;
             const { startDate, endDate, interval = 'monthly' } = req.query;
-            let dateTrunc = 'month';
-            if (interval === 'daily') dateTrunc = 'day';
-            if (interval === 'weekly') dateTrunc = 'week';
-            const { rows } = await db.query(
-                `SELECT date_trunc('${dateTrunc}', expense_date) as bucket, COALESCE(SUM(amount),0)::float AS amount
-                 FROM expenses WHERE user_id = $1 AND expense_date BETWEEN $2 AND $3
-                 GROUP BY bucket ORDER BY bucket`,
-                [userId, startDate, endDate]
-            ).catch(() => ({ rows: [] }));
-            const data = rows.map(r => ({ date: new Date(r.bucket).toISOString().slice(0,10), amount: Number(r.amount) }));
+            
+            // Get expenses from Expense Service API
+            const expensesResp = await axios.get(`${process.env.EXPENSE_SERVICE_URL}/api/v1/expenses`, {
+                headers: { Authorization: req.headers.authorization },
+                params: { startDate, endDate }
+            }).catch(() => ({ data: { expenses: [] } }));
+
+            // Group by interval
+            const bucketMap = {};
+            expensesResp.data.expenses?.forEach(exp => {
+                const date = new Date(exp.expense_date);
+                let bucket;
+                if (interval === 'daily') {
+                    bucket = date.toISOString().slice(0, 10);
+                } else if (interval === 'weekly') {
+                    const weekStart = new Date(date);
+                    weekStart.setDate(date.getDate() - date.getDay());
+                    bucket = weekStart.toISOString().slice(0, 10);
+                } else {
+                    bucket = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                }
+                
+                if (!bucketMap[bucket]) {
+                    bucketMap[bucket] = { date: bucket, amount: 0 };
+                }
+                bucketMap[bucket].amount += Number(exp.amount);
+            });
+
+            const data = Object.values(bucketMap).sort((a, b) => a.date.localeCompare(b.date));
             res.json({ data });
         } catch (error) { next(error); }
     }
@@ -91,15 +130,19 @@ class ReportController {
         try {
             const userId = req.user.id || req.user.userId;
             const { startDate, endDate } = req.body;
-            const { rows } = await db.query(
-                `SELECT id, category_id, amount, description, expense_date
-                 FROM expenses WHERE user_id = $1 AND expense_date BETWEEN $2 AND $3
-                 ORDER BY expense_date DESC`,
-                [userId, startDate, endDate]
-            ).catch(() => ({ rows: [] }));
+            
+            // Get expenses from Expense Service API
+            const expensesResp = await axios.get(`${process.env.EXPENSE_SERVICE_URL}/api/v1/expenses`, {
+                headers: { Authorization: req.headers.authorization },
+                params: { startDate, endDate }
+            }).catch(() => ({ data: { expenses: [] } }));
 
+            const rows = expensesResp.data.expenses || [];
             const header = 'id,categoryId,amount,description,expenseDate\n';
-            const body = rows.map(r => `${r.id},${r.category_id},${r.amount},"${(r.description||'').replace(/"/g,'""')}",${r.expense_date.toISOString().slice(0,10)}`).join('\n');
+            const body = rows.map(r => {
+                const date = r.expense_date instanceof Date ? r.expense_date.toISOString().slice(0,10) : r.expense_date;
+                return `${r.id},${r.category_id},${r.amount},"${(r.description||'').replace(/"/g,'""')}",${date}`;
+            }).join('\n');
             const csv = header + body + '\n';
             res.setHeader('Content-Type', 'text/csv');
             res.setHeader('Content-Disposition', 'attachment; filename="expenses.csv"');
@@ -122,28 +165,60 @@ class ReportController {
             });
             const currentMonth = { spent: statsResp.data.totalAmount, expenseCount: statsResp.data.totalExpenses };
 
-            const topCategories = await db.query(
-                `SELECT category_id, COALESCE(SUM(amount),0)::float AS amount
-                 FROM expenses WHERE user_id = $1 AND expense_date BETWEEN $2 AND $3
-                 GROUP BY category_id ORDER BY amount DESC LIMIT 5`,
-                [userId, start, end]
-            ).then(r => r.rows);
+            // Get current month expenses
+            const currentMonthExpenses = await axios.get(`${process.env.EXPENSE_SERVICE_URL}/api/v1/expenses`, {
+                headers: { Authorization: req.headers.authorization },
+                params: { startDate: start, endDate: end }
+            }).catch(() => ({ data: { expenses: [] } }));
 
-            const recentExpenses = await db.query(
-                `SELECT id, category_id, amount, description, expense_date
-                 FROM expenses WHERE user_id = $1
-                 ORDER BY expense_date DESC LIMIT 10`,
-                [userId]
-            ).then(r => r.rows);
+            // Get all expenses for recent and trend
+            const allExpensesResp = await axios.get(`${process.env.EXPENSE_SERVICE_URL}/api/v1/expenses`, {
+                headers: { Authorization: req.headers.authorization }
+            }).catch(() => ({ data: { expenses: [] } }));
 
+            const allExpenses = allExpensesResp.data.expenses || [];
+            const currentMonthExp = currentMonthExpenses.data.expenses || [];
+
+            // Top categories (current month)
+            const categoryMap = {};
+            currentMonthExp.forEach(exp => {
+                const catId = exp.category_id;
+                if (!categoryMap[catId]) {
+                    categoryMap[catId] = { category_id: catId, amount: 0 };
+                }
+                categoryMap[catId].amount += Number(exp.amount);
+            });
+            const topCategories = Object.values(categoryMap)
+                .sort((a, b) => b.amount - a.amount)
+                .slice(0, 5);
+
+            // Recent expenses (all time, sorted by date)
+            const recentExpenses = allExpenses
+                .sort((a, b) => new Date(b.expense_date) - new Date(a.expense_date))
+                .slice(0, 10)
+                .map(exp => ({
+                    id: exp.id,
+                    category_id: exp.category_id,
+                    amount: exp.amount,
+                    description: exp.description,
+                    expense_date: exp.expense_date
+                }));
+
+            // Monthly trend (last 6 months)
             const last6Start = new Date(now.getUTCFullYear(), now.getUTCMonth() - 5, 1).toISOString().slice(0,10);
-            const monthlyTrendRows = await db.query(
-                `SELECT date_trunc('month', expense_date) as bucket, COALESCE(SUM(amount),0)::float AS amount
-                 FROM expenses WHERE user_id = $1 AND expense_date >= $2
-                 GROUP BY bucket ORDER BY bucket`,
-                [userId, last6Start]
-            ).then(r => r.rows);
-            const monthlyTrend = monthlyTrendRows.map(r => ({ date: new Date(r.bucket).toISOString().slice(0,10), amount: Number(r.amount) }));
+            const trendExpenses = allExpenses.filter(exp => exp.expense_date >= last6Start);
+            const monthlyTrendMap = {};
+            trendExpenses.forEach(exp => {
+                const date = new Date(exp.expense_date);
+                const bucket = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                if (!monthlyTrendMap[bucket]) {
+                    monthlyTrendMap[bucket] = { date: bucket, amount: 0 };
+                }
+                monthlyTrendMap[bucket].amount += Number(exp.amount);
+            });
+            const monthlyTrend = Object.values(monthlyTrendMap)
+                .sort((a, b) => a.date.localeCompare(b.date))
+                .map(r => ({ date: r.date, amount: Number(r.amount) }));
 
             const data = { currentMonth, topCategories, recentExpenses, monthlyTrend };
             await redis.setEx(cacheKey, 600, JSON.stringify(data));
