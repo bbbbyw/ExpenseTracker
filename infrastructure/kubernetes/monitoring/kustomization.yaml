@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: expense-tracker
+
+resources:
+  - prometheus/prometheus-rbac.yaml
+  - prometheus/prometheus-config.yaml
+  - prometheus/prometheus-deployment.yaml
+  - grafana/grafana-deployment.yaml
+  # Flagger resources are placeholders; Flagger itself is installed separately
+  - flagger/canary.yaml
+

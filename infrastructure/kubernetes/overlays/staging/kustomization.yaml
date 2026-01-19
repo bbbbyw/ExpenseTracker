@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+images:
+  - name: your-registry/auth-service
+    newName: your-registry/auth-service
+    newTag: staging
+  - name: your-registry/expense-service
+    newName: your-registry/expense-service
+    newTag: staging
+  - name: your-registry/category-service
+    newName: your-registry/category-service
+    newTag: staging
+  - name: your-registry/report-service
+    newName: your-registry/report-service
+    newTag: staging
+

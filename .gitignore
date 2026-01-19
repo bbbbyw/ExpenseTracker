@@ -7,3 +7,4 @@ coverage/
 .vscode/
 .idea/
 expense_tracker_guide.md
+secrets.yaml

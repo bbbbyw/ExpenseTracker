@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: expense-tracker
+data:
+  NODE_ENV: "production"
+  JWT_EXPIRE: "15m"
+  REFRESH_TOKEN_EXPIRE: "7d"
+  DB_PORT: "5432"
+  DB_USER: "expense_user"
+  RABBITMQ_USER: "expense_user"
+  # in-cluster service URLs
+  AUTH_SERVICE_URL: "http://auth-service:3000"
+  EXPENSE_SERVICE_URL: "http://expense-service:3000"
+  CATEGORY_SERVICE_URL: "http://category-service:3000"
+
