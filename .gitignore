@@ -7,4 +7,5 @@ coverage/
 .vscode/
 .idea/
 expense_tracker_guide.md
+PHASE1_K8S_WHAT_WAS_DONE.md
 secrets.yaml
