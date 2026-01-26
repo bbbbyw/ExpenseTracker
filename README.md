@@ -251,7 +251,7 @@ Each service can also run standalone using its `.env.example` file.
 
 ## Demo
 
-**Live demo:** `https://youtu.be/VgVtuHzXFb8`
+**Live demo:** https://youtu.be/VgVtuHzXFb8
 
 ![Grafana Monitoring Dashboard](image/Mornitoring-Demo.png)
 
