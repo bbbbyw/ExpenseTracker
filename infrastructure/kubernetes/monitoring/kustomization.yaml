@@ -6,7 +6,8 @@ resources:
   - prometheus/prometheus-rbac.yaml
   - prometheus/prometheus-config.yaml
   - prometheus/prometheus-deployment.yaml
+  - grafana/grafana-secret.yaml
   - grafana/grafana-deployment.yaml
-  # Flagger resources are placeholders; Flagger itself is installed separately
-  - flagger/canary.yaml
+  - grafana/grafana-datasources.yaml
+  - grafana/grafana-dashboards.yaml
 

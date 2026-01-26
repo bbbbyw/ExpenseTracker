@@ -55,7 +55,14 @@ class ExpenseController {
         try {
             const userId = req.user.id || req.user.userId;
             const { id } = req.params;
-            const { rows } = await db.query('SELECT * FROM expenses WHERE id = $1 AND user_id = $2', [id, userId]);
+            
+            // Validate that id is a valid integer
+            const expenseId = parseInt(id, 10);
+            if (isNaN(expenseId) || expenseId <= 0) {
+                return res.status(400).json({ error: 'Invalid expense ID format' });
+            }
+            
+            const { rows } = await db.query('SELECT * FROM expenses WHERE id = $1 AND user_id = $2', [expenseId, userId]);
             if (rows.length === 0) return res.status(404).json({ error: 'Expense not found' });
             res.json(rows[0]);
         } catch (error) {

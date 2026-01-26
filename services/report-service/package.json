@@ -4,7 +4,8 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "dev": "nodemon src/index.js",
+    "test": "jest --runInBand"
   },
   "dependencies": {
     "amqplib": "^0.10.3",
@@ -15,10 +16,13 @@
     "express-validator": "^7.0.1",
     "helmet": "^7.1.0",
     "pg": "^8.11.3",
-    "redis": "^4.6.10"
+    "redis": "^4.6.10",
+    "prom-client": "^15.1.0"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.1",
+    "supertest": "^6.3.4"
   }
 }
 

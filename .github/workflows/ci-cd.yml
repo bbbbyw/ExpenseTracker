@@ -1,0 +1,45 @@
+# CI: Run service tests on push/PR. No build or deploy.
+
+name: CI (Tests)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/**'
+      - '.github/workflows/ci-cd.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'services/**'
+      - '.github/workflows/ci-cd.yml'
+
+env:
+  NODE_ENV: test
+
+jobs:
+  test:
+    name: Test services
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [auth-service, expense-service, category-service, report-service]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: services/${{ matrix.service }}/package-lock.json
+
+      - name: Install dependencies
+        working-directory: services/${{ matrix.service }}
+        run: npm ci
+
+      - name: Run tests
+        working-directory: services/${{ matrix.service }}
+        run: npm test

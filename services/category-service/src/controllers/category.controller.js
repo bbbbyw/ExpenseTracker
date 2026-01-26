@@ -46,18 +46,41 @@ class CategoryController {
             const userId = req.user.id || req.user.userId;
             const { id } = req.params;
             const { name, color, icon, monthlyBudget } = req.body;
-            const { rows } = await db.query(
-                `UPDATE categories SET
-                   name = COALESCE($1, name),
-                   color = COALESCE($2, color),
-                   icon = COALESCE($3, icon),
-                   monthly_budget = COALESCE($4, monthly_budget)
-                 WHERE id = $5 AND user_id = $6 AND is_default = false
-                 RETURNING *`,
-                [name || null, color || null, icon || null, monthlyBudget || null, id, userId]
+            
+            // First check if category exists and user has access
+            const { rows: checkRows } = await db.query(
+                `SELECT id, is_default, user_id FROM categories WHERE id = $1 AND (user_id = $2 OR is_default = true)`,
+                [id, userId]
             );
-            if (rows.length === 0) return res.status(404).json({ error: 'Category not found' });
-            res.json(rows[0]);
+            if (checkRows.length === 0) return res.status(404).json({ error: 'Category not found' });
+            
+            const category = checkRows[0];
+            
+            // For default categories, only allow budget updates
+            if (category.is_default) {
+                const { rows } = await db.query(
+                    `UPDATE categories SET monthly_budget = COALESCE($1, monthly_budget)
+                     WHERE id = $2 AND is_default = true
+                     RETURNING *`,
+                    [monthlyBudget || null, id]
+                );
+                if (rows.length === 0) return res.status(404).json({ error: 'Category not found' });
+                res.json(rows[0]);
+            } else {
+                // For user categories, allow full update
+                const { rows } = await db.query(
+                    `UPDATE categories SET
+                       name = COALESCE($1, name),
+                       color = COALESCE($2, color),
+                       icon = COALESCE($3, icon),
+                       monthly_budget = COALESCE($4, monthly_budget)
+                     WHERE id = $5 AND user_id = $6 AND is_default = false
+                     RETURNING *`,
+                    [name || null, color || null, icon || null, monthlyBudget || null, id, userId]
+                );
+                if (rows.length === 0) return res.status(404).json({ error: 'Category not found' });
+                res.json(rows[0]);
+            }
         } catch (error) { next(error); }
     }
 
@@ -79,8 +102,17 @@ class CategoryController {
             const userId = req.user.id || req.user.userId;
             const { id } = req.params;
             const { monthlyBudget } = req.body;
+            
+            // First check if category exists and user has access (default or owned)
+            const { rows: checkRows } = await db.query(
+                `SELECT id, is_default, user_id FROM categories WHERE id = $1 AND (user_id = $2 OR is_default = true)`,
+                [id, userId]
+            );
+            if (checkRows.length === 0) return res.status(404).json({ error: 'Category not found' });
+            
+            // Update budget - allow for both default and user categories
             const { rows } = await db.query(
-                `UPDATE categories SET monthly_budget = $1 WHERE id = $2 AND user_id = $3 AND is_default = false RETURNING id, monthly_budget`,
+                `UPDATE categories SET monthly_budget = $1 WHERE id = $2 AND (user_id = $3 OR is_default = true) RETURNING id, monthly_budget`,
                 [monthlyBudget, id, userId]
             );
             if (rows.length === 0) return res.status(404).json({ error: 'Category not found' });

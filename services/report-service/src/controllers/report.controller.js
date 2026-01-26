@@ -19,9 +19,23 @@ class ReportController {
             const { year, month } = req.query;
             const { start, end } = getMonthRange(Number(year), Number(month));
 
-            const cacheKey = `reports:monthly:${userId}:${year}-${month}`;
-            const cached = await redis.get(cacheKey);
-            if (cached) return res.json(JSON.parse(cached));
+            // Skip Redis cache for monthly reports to ensure real-time data
+            // Monthly reports need to reflect latest expenses immediately
+            // const cacheKey = `reports:monthly:${userId}:${year}-${month}`;
+            // let cached = null;
+            // try {
+            //     cached = await redis.get(cacheKey);
+            // } catch (redisError) {
+            //     console.warn('Redis cache read failed:', redisError.message);
+            // }
+            // if (cached) {
+            //     res.set({
+            //         'Cache-Control': 'no-cache, no-store, must-revalidate',
+            //         'Pragma': 'no-cache',
+            //         'Expires': '0'
+            //     });
+            //     return res.json(JSON.parse(cached));
+            // }
 
             const statsResp = await axios.get(`${process.env.EXPENSE_SERVICE_URL}/api/v1/expenses/stats`, {
                 headers: { Authorization: req.headers.authorization },
@@ -45,18 +59,74 @@ class ReportController {
             });
             const byCategoryResp = { rows: Object.values(byCategoryMap).sort((a, b) => b.amount - a.amount) };
 
+            // Get budget information for categories
+            let budgetExceeded = [];
+            try {
+                const categoryResp = await axios.get(`${process.env.CATEGORY_SERVICE_URL}/api/v1/categories`, {
+                    headers: { Authorization: req.headers.authorization }
+                });
+
+                const categories = categoryResp.data.categories || [];
+                const categoryMap = {};
+                categories.forEach(cat => {
+                    categoryMap[cat.id] = { name: cat.name, budget: cat.monthly_budget, color: cat.color, icon: cat.icon };
+                });
+
+                // Check which categories exceeded budget
+                budgetExceeded = byCategoryResp.rows
+                    .filter(cat => {
+                        const catInfo = categoryMap[cat.category_id];
+                        return catInfo && catInfo.budget && Number(cat.amount) > Number(catInfo.budget);
+                    })
+                    .map(cat => {
+                        const catInfo = categoryMap[cat.category_id];
+                        return {
+                            category_id: cat.category_id,
+                            name: catInfo.name,
+                            icon: catInfo.icon,
+                            color: catInfo.color,
+                            budget: Number(catInfo.budget),
+                            spent: Number(cat.amount),
+                            exceededBy: Number(cat.amount) - Number(catInfo.budget)
+                        };
+                    })
+                    .sort((a, b) => b.exceededBy - a.exceededBy);
+            } catch (budgetError) {
+                console.warn('Failed to fetch budget data:', budgetError.message);
+                budgetExceeded = [];
+            }
+
             const data = {
                 totalSpent: statsResp.data.totalAmount,
                 expenseCount: statsResp.data.totalExpenses,
-                byCategory: byCategoryResp.rows
+                byCategory: byCategoryResp.rows,
+                budgetExceeded
             };
 
-            await redis.setEx(cacheKey, 3600, JSON.stringify(data));
-            await db.query(
-                `INSERT INTO generated_reports (user_id, report_type, report_data, start_date, end_date, expires_at)
-                 VALUES ($1, $2, $3, $4, $5, NOW() + INTERVAL '1 day')`,
-                [userId, 'monthly', data, start, end]
-            );
+            // Don't cache monthly reports - they need to be real-time
+            // try {
+            //     await redis.setEx(cacheKey, 60, JSON.stringify(data));
+            // } catch (redisError) {
+            //     console.warn('Redis cache write failed:', redisError.message);
+            // }
+            
+            try {
+                await db.query(
+                    `INSERT INTO generated_reports (user_id, report_type, report_data, start_date, end_date, expires_at)
+                     VALUES ($1, $2, $3, $4, $5, NOW() + INTERVAL '1 day')`,
+                    [userId, 'monthly', data, start, end]
+                );
+            } catch (dbError) {
+                console.warn('Failed to save report to database:', dbError.message);
+                // Continue even if DB save fails
+            }
+            
+            // Set headers to prevent browser caching
+            res.set({
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            });
             res.json(data);
         } catch (error) { next(error); }
     }
@@ -156,14 +226,31 @@ class ReportController {
             const now = new Date();
             const { start, end } = getMonthRange(now.getUTCFullYear(), now.getUTCMonth() + 1);
             const cacheKey = `reports:dashboard:${userId}`;
-            const cached = await redis.get(cacheKey);
+            
+            // Try to get from cache, but don't fail if Redis is unavailable
+            let cached = null;
+            try {
+                cached = await redis.get(cacheKey);
+            } catch (redisError) {
+                console.warn('Redis cache read failed:', redisError.message);
+            }
+            
             if (cached) return res.json(JSON.parse(cached));
 
+            // Get stats with error handling
             const statsResp = await axios.get(`${process.env.EXPENSE_SERVICE_URL}/api/v1/expenses/stats`, {
                 headers: { Authorization: req.headers.authorization },
                 params: { startDate: start, endDate: end }
+            }).catch((error) => {
+                console.error('Failed to fetch expense stats:', error.message);
+                // Return default values if stats endpoint fails
+                return { data: { totalAmount: 0, totalExpenses: 0 } };
             });
-            const currentMonth = { spent: statsResp.data.totalAmount, expenseCount: statsResp.data.totalExpenses };
+            
+            const currentMonth = { 
+                spent: statsResp.data?.totalAmount || 0, 
+                expenseCount: statsResp.data?.totalExpenses || 0 
+            };
 
             // Get current month expenses
             const currentMonthExpenses = await axios.get(`${process.env.EXPENSE_SERVICE_URL}/api/v1/expenses`, {
@@ -221,7 +308,14 @@ class ReportController {
                 .map(r => ({ date: r.date, amount: Number(r.amount) }));
 
             const data = { currentMonth, topCategories, recentExpenses, monthlyTrend };
-            await redis.setEx(cacheKey, 600, JSON.stringify(data));
+            
+            // Try to cache, but don't fail if Redis is unavailable
+            try {
+                await redis.setEx(cacheKey, 600, JSON.stringify(data));
+            } catch (redisError) {
+                console.warn('Redis cache write failed:', redisError.message);
+            }
+            
             res.json(data);
         } catch (error) { next(error); }
     }

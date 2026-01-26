@@ -36,10 +36,12 @@ router.get(
     controller.list
 );
 
+// IMPORTANT: /stats must be defined BEFORE /:id to avoid route matching conflicts
+router.get('/stats', authenticate, controller.stats);
+
 router.get('/:id', authenticate, controller.getById);
 router.put('/:id', authenticate, controller.update);
 router.delete('/:id', authenticate, controller.remove);
-router.get('/stats', authenticate, controller.stats);
 
 module.exports = router;
 

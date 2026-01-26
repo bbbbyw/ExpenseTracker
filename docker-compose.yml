@@ -4,14 +4,14 @@ services:
     container_name: auth-db
     environment:
       POSTGRES_DB: auth_db
-      POSTGRES_USER: expense_user
-      POSTGRES_PASSWORD: expense_pass
+      POSTGRES_USER: ${DB_USER:-expense_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-expense_pass}
     ports:
       - "5432:5432"
     volumes:
       - auth-db-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U expense_user -d auth_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-expense_user} -d auth_db"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -21,8 +21,8 @@ services:
     container_name: expense-db
     environment:
       POSTGRES_DB: expense_db
-      POSTGRES_USER: expense_user
-      POSTGRES_PASSWORD: expense_pass
+      POSTGRES_USER: ${DB_USER:-expense_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-expense_pass}
     ports:
       - "5433:5432"
     volumes:
@@ -33,8 +33,8 @@ services:
     container_name: category-db
     environment:
       POSTGRES_DB: category_db
-      POSTGRES_USER: expense_user
-      POSTGRES_PASSWORD: expense_pass
+      POSTGRES_USER: ${DB_USER:-expense_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-expense_pass}
     ports:
       - "5434:5432"
     volumes:
@@ -45,8 +45,8 @@ services:
     container_name: report-db
     environment:
       POSTGRES_DB: report_db
-      POSTGRES_USER: expense_user
-      POSTGRES_PASSWORD: expense_pass
+      POSTGRES_USER: ${DB_USER:-expense_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-expense_pass}
     ports:
       - "5435:5432"
     volumes:
@@ -72,8 +72,8 @@ services:
       - "5672:5672"
       - "15672:15672"
     environment:
-      RABBITMQ_DEFAULT_USER: expense_user
-      RABBITMQ_DEFAULT_PASS: expense_pass
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-expense_user}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-expense_pass}
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
     healthcheck:
@@ -93,9 +93,9 @@ services:
       DB_HOST: auth-db
       DB_PORT: 5432
       DB_NAME: auth_db
-      DB_USER: expense_user
-      DB_PASSWORD: expense_pass
-      JWT_SECRET: dev-secret-change-in-production
+      DB_USER: ${DB_USER:-expense_user}
+      DB_PASSWORD: ${DB_PASSWORD:-expense_pass}
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
       JWT_EXPIRE: 15m
       REFRESH_TOKEN_EXPIRE: 7d
       REDIS_URL: redis://redis:6379
@@ -119,11 +119,11 @@ services:
       DB_HOST: expense-db
       DB_PORT: 5432
       DB_NAME: expense_db
-      DB_USER: expense_user
-      DB_PASSWORD: expense_pass
+      DB_USER: ${DB_USER:-expense_user}
+      DB_PASSWORD: ${DB_PASSWORD:-expense_pass}
       AUTH_SERVICE_URL: http://auth-service:3000
       CATEGORY_SERVICE_URL: http://category-service:3000
-      RABBITMQ_URL: amqp://expense_user:expense_pass@rabbitmq:5672
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-expense_user}:${RABBITMQ_PASSWORD:-expense_pass}@rabbitmq:5672
     depends_on:
       expense-db:
         condition: service_started
@@ -146,8 +146,8 @@ services:
       DB_HOST: category-db
       DB_PORT: 5432
       DB_NAME: category_db
-      DB_USER: expense_user
-      DB_PASSWORD: expense_pass
+      DB_USER: ${DB_USER:-expense_user}
+      DB_PASSWORD: ${DB_PASSWORD:-expense_pass}
       AUTH_SERVICE_URL: http://auth-service:3000
       EXPENSE_SERVICE_URL: http://expense-service:3000
     depends_on:
@@ -170,12 +170,12 @@ services:
       DB_HOST: report-db
       DB_PORT: 5432
       DB_NAME: report_db
-      DB_USER: expense_user
-      DB_PASSWORD: expense_pass
+      DB_USER: ${DB_USER:-expense_user}
+      DB_PASSWORD: ${DB_PASSWORD:-expense_pass}
       AUTH_SERVICE_URL: http://auth-service:3000
       EXPENSE_SERVICE_URL: http://expense-service:3000
       CATEGORY_SERVICE_URL: http://category-service:3000
-      RABBITMQ_URL: amqp://expense_user:expense_pass@rabbitmq:5672
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-expense_user}:${RABBITMQ_PASSWORD:-expense_pass}@rabbitmq:5672
       REDIS_URL: redis://redis:6379
     depends_on:
       report-db:
