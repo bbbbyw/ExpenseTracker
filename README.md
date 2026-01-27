@@ -1,6 +1,7 @@
 # Expense Tracker
 
 Production-style microservices expense tracking app with a full backend stack and a Next.js UI. The repo includes services, tests, Docker Compose for local development, and Kubernetes manifests for deployment + monitoring.
+Note: Kubernetes deployment targets a local cluster (Docker Desktop) to focus on orchestration, service networking, and observability concepts.
 
 ## Project Snapshot
 - **Architecture:** 4 Node.js microservices + API Gateway + event bus
