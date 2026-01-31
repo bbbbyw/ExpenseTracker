@@ -176,45 +176,11 @@ curl http://localhost:3004/health
 # logs (follow)
 docker-compose logs -f
 ```
-RabbitMQ UI: `http://localhost:15672` (user: `expense_user`, pass: `expense_pass`).
-
-## First-Time Usage (API Gateway)
-1) Register
-```bash
-curl -X POST http://localhost:8080/api/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"you@example.com","password":"YourPassw0rd!","firstName":"You","lastName":"User"}'
-```
-2) Login (copy `accessToken`)
-```bash
-curl -X POST http://localhost:8080/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"you@example.com","password":"YourPassw0rd!"}'
-```
-3) Use the token
-```bash
-$TOKEN="Bearer <paste_access_token_here>"
-
-# list categories (defaults are auto-seeded)
-curl -H "Authorization: $TOKEN" http://localhost:8080/api/v1/categories
-
-# create an expense
-curl -X POST http://localhost:8080/api/v1/expenses \
-  -H "Authorization: $TOKEN" -H "Content-Type: application/json" \
-  -d '{"categoryId":1,"amount":25.50,"description":"Lunch","expenseDate":"2025-10-08"}'
-
-# monthly report
-curl -H "Authorization: $TOKEN" \
-  "http://localhost:8080/api/v1/reports/monthly?year=2025&month=10"
-```
-
 ## Configuration
 Docker Compose works out of the box. Optional environment overrides:
 - `DB_USER`, `DB_PASSWORD`
 - `JWT_SECRET`
 - `RABBITMQ_USER`, `RABBITMQ_PASSWORD`
-
-Each service can also run standalone using its `.env.example` file.
 
 ## API Map (Gateway Routes)
 - Auth: `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me`
