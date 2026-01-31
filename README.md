@@ -3,6 +3,12 @@
 Production-style microservices expense tracking app with a full backend stack and a Next.js UI. The repo includes services, tests, Docker Compose for local development, and Kubernetes manifests for deployment + monitoring.
 Note: Kubernetes deployment targets a local cluster (Docker Desktop) to focus on orchestration, service networking, and observability concepts.
 
+## Demo
+
+**Live demo:** https://youtu.be/VgVtuHzXFb8
+
+![Grafana Monitoring Dashboard](image/Mornitoring-Demo.png)
+
 ## Project Snapshot
 - **Architecture:** 4 Node.js microservices + API Gateway + event bus
 - **Data:** PostgreSQL per service, Redis caching, RabbitMQ events
@@ -214,12 +220,6 @@ Docker Compose works out of the box. Optional environment overrides:
 ## Observability
 - Each service exposes Prometheus metrics at `/metrics`.
 - Prometheus/Grafana manifests live in `infrastructure/kubernetes/monitoring/`.
-
-## Demo
-
-**Live demo:** https://youtu.be/VgVtuHzXFb8
-
-![Grafana Monitoring Dashboard](image/Mornitoring-Demo.png)
 
 ## Infrastructure & Deployment Assets
 - `docker-compose.yml`: full local stack
