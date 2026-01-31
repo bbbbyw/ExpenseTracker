@@ -160,7 +160,6 @@ npm install
 npm run dev
 ```
 Default API base URL is `http://localhost:8080`.  
-For Kubernetes, see `frontend/K8S_SETUP.md` and `frontend/ENVIRONMENT.md`.
 
 ## Quick Start (Local)
 ```bash
